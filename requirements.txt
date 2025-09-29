@@ -1,0 +1,21 @@
+# Core ML and Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.21.0
+
+# Reinforcement Learning Environment
+gymnasium>=0.28.0
+flappy-bird-gymnasium>=0.1.0
+
+# Configuration and Utilities
+PyYAML>=6.0
+matplotlib>=3.5.0
+psutil>=5.9.0
+
+# Development and Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Optional: For better performance
+# torch-audio>=2.0.0  # Uncomment if using audio features
+# tensorboard>=2.10.0  # Uncomment for logging and visualization
