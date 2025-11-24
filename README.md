@@ -1,6 +1,6 @@
 # Flappy Transformer: Deep Q-Network with Transformer Architecture
 
-This project implements a Deep Q-Network (DQN) using Transformer architecture for playing Flappy Bird, based on the research paper "Enhancing Security in Visible Light Communication: A Tabu-Search-Based Method for Transmitter Selection" published in Sensors journal (https://www.mdpi.com/1424-8220/24/6/1905).
+This project implements a Deep Q-Network (DQN) using Transformer architecture for playing Flappy Bird, based on the research paper "Playing Flappy Bird Based on Motion Recognition Using a Transformer Model and LIDAR Sensor" (https://www.mdpi.com/1424-8220/24/6/1905).
 
 ## Overview
 

@@ -21,6 +21,11 @@ class Agent:
 
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
+            print(f"   GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        else:
+            print("⚠️  CUDA not available, using CPU")
         self.N = hyperparameter_vars['N']
         self.dropout = hyperparameter_vars['dropout']
         self.seq_len = hyperparameter_vars['seq_len']

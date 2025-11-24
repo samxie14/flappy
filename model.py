@@ -114,7 +114,6 @@ class EncoderBlock(nn.Module):
         return self.residual_connections[1](x, self.feed_forward_block)
 
 
-
 class Encoder(nn.Module):
     def __init__(self, layers, preprocessing: PreProcessing):
         super().__init__()
