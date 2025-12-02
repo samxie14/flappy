@@ -1,6 +1,6 @@
 flappybird1:
   env_id: "FlappyBird-v0"
-  num_episodes: 100000
+  num_episodes: 25
   learning_rate: 0.0003
   network_sync_rate: 100
   num_hidden_1: 256
@@ -9,8 +9,8 @@ flappybird1:
   d_ff: 512
   heads: 8
   dropout: 0.1
-  N: 6
+  N: 8
   seq_len: 16
-  maxlen: 50000
-  batch_size: 64
+  maxlen: 200000
+  batch_size: 1024
   discount_factor_g: 0.99

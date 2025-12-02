@@ -1,5 +1,8 @@
 import flappy_bird_gymnasium
 import gymnasium
+from gymnasium.wrappers import RecordVideo
+
+import os
 import torch
 import yaml
 from model import DQN
@@ -22,10 +25,10 @@ class Agent:
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if torch.cuda.is_available():
-            print(f"✅ Using GPU: {torch.cuda.get_device_name(0)}")
-            print(f"   GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+            print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
         else:
-            print("⚠️  CUDA not available, using CPU")
+            print("CUDA not available, using CPU")
         self.N = hyperparameter_vars['N']
         self.dropout = hyperparameter_vars['dropout']
         self.seq_len = hyperparameter_vars['seq_len']
@@ -44,6 +47,10 @@ class Agent:
 
         self.episode_rewards = []
         self.avg_rewards = []
+        self.best_reward = float('-inf')
+        self.best_episode_transitions = None
+        self.best_episode_num = 0
+        self.best_episode_seed = None
 
     def generate_past_states(self, episode_transitions, state_dim):
         num_transitions = len(episode_transitions)
@@ -51,7 +58,7 @@ class Agent:
 
         if num_transitions == 0:
             return torch.zeros(self.seq_len, state_dim, device=self.device)
-
+        
         elif num_transitions >= self.seq_len:
             states_list = []
             for i in range(num_transitions-self.seq_len, num_transitions):
@@ -83,7 +90,10 @@ class Agent:
         epsilon_decay = 0.995
 
         for episode in range(self.num_episodes):
-            state, _ = env.reset()
+            # Use episode number as seed to ensure reproducibility
+            # This way we can replay the exact same environment configuration
+            episode_seed = episode
+            state, info = env.reset(seed=episode_seed)
             episode_reward = 0
 
             state = torch.tensor(state, dtype=torch.float).to(self.device)
@@ -107,9 +117,19 @@ class Agent:
 
                 episode_reward += reward
                 if done:
-                    self.episode_rewards.append(episode_reward)
+                    episode_reward_float = float(episode_reward.item() if torch.is_tensor(episode_reward) else episode_reward)
+                    self.episode_rewards.append(episode_reward_float)
                     self.avg_rewards.append(sum(self.episode_rewards)/len(self.episode_rewards))
-                    print(f"Episode {episode+1} - Reward: {episode_reward} - Average Reward: {self.avg_rewards[-1]}")
+                    
+                    # Track best episode
+                    if episode_reward_float > self.best_reward:
+                        self.best_reward = episode_reward_float
+                        self.best_episode_transitions = episode_transitions.copy()
+                        self.best_episode_num = episode + 1
+                        self.best_episode_seed = episode_seed
+                        print(f"Episode {episode+1} - Reward: {episode_reward_float:.2f} - Average Reward: {self.avg_rewards[-1]:.2f} NEW BEST!")
+                    else:
+                        print(f"Episode {episode+1} - Reward: {episode_reward_float:.2f} - Average Reward: {self.avg_rewards[-1]:.2f}")
                     break
 
                 state = next_state
@@ -132,6 +152,11 @@ class Agent:
         torch.save(policy_q_net.state_dict(), "trained_model.pth")
         env.close()
         
+        # Record best episode as video
+        if self.best_episode_transitions is not None:
+            print(f"\nRecording best episode (Episode {self.best_episode_num}, Reward: {self.best_reward:.2f}) as video...")
+            self.record_best_episode(policy_q_net, state_dim, num_actions)
+        
     
     def optimize(self, batch, policy_q_net, target_q_net, optimizer):
         states = batch[0]
@@ -151,6 +176,63 @@ class Agent:
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+    def record_best_episode(self, policy_q_net, state_dim, num_actions):
+        """Record the best episode as an MP4 video using the trained model"""
+        
+        # Create video directory
+        video_dir = "videos"
+        os.makedirs(video_dir, exist_ok=True)
+        
+        # Create environment with video recording
+        env = gymnasium.make(self.env_id, render_mode="rgb_array", use_lidar=True)
+        env = RecordVideo(env, video_dir, name_prefix=f"best_episode_{self.best_episode_num}")
+        
+        # Set model to eval mode
+        policy_q_net.eval()
+        
+        # Reset environment with the SAME seed as the best episode
+        # This ensures the pillar positions are identical to the original episode
+        state, _ = env.reset(seed=self.best_episode_seed)
+        state = torch.tensor(state, dtype=torch.float).to(self.device)
+        
+        # Replay using the model's policy (deterministic, no exploration)
+        episode_transitions = []
+        total_reward = 0
+        
+        with torch.no_grad():
+            while True:
+                # Build state sequence
+                states = self.generate_past_states(episode_transitions, state_dim)
+                states = states.unsqueeze(0)  # Add batch dimension: (1, seq_len, state_dim)
+                
+                # Get action from model
+                q_values = policy_q_net(states)
+                action = torch.argmax(q_values, dim=1).squeeze(0)
+                
+                # Take step in environment (this will be recorded)
+                next_state, reward, done, _, info = env.step(action.item())
+                next_state = torch.tensor(next_state, dtype=torch.float).to(self.device)
+                reward = torch.tensor(reward, dtype=torch.float).to(self.device)
+                
+                episode_transitions.append((state, action, next_state, reward, done))
+                total_reward += float(reward.item() if torch.is_tensor(reward) else reward)
+                
+                if done:
+                    break
+                
+                state = next_state
+        
+        env.close()
+        policy_q_net.train()  # Set back to training mode
+        
+        # Find the video file
+        video_files = [f for f in os.listdir(video_dir) if f.startswith(f"best_episode_{self.best_episode_num}") and f.endswith(".mp4")]
+        if video_files:
+            print(f"Best episode video saved to: {video_dir}/{video_files[0]}")
+            print(f"   Replay reward: {total_reward:.2f} (Original: {self.best_reward:.2f})")
+        else:
+            print(f"Video recording completed, check {video_dir}/ for output files")
 
 
 if __name__ == "__main__":
